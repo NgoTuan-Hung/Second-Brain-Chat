@@ -9,8 +9,19 @@
   "window_width": 734,
   "window_height": 553,
   "bubble_size": 64,
-  "last_x": 885,
-  "last_y": 167,
+  "last_x": 946,
+  "last_y": 228,
   "sound_enabled": false,
-  "show_thinking": true
+  "show_thinking": true,
+  "proactive_enabled": true,
+  "morning_briefing": true,
+  "spaced_repetition": true,
+  "spaced_min_age_days": 0,
+  "evening_reflection": true,
+  "proactive_interval_min": 60,
+  "morning_time": "08:00",
+  "evening_time": "18:00",
+  "bubble_dismiss_sec": 15,
+  "settings_win_w": 620,
+  "settings_win_h": 680
 }

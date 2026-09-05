@@ -48,8 +48,13 @@ QPushButton.HeaderBtn:hover {
 }
 
 QPushButton.HeaderBtn#CloseBtn:hover {
-    background: rgba(239, 68, 68, 0.25);
-    color: #F87171;
+    background: rgba(255, 255, 255, 0.15);
+    color: #F8FAFC;
+}
+
+QPushButton.HeaderBtn#QuitBtn:hover {
+    background: rgba(239, 68, 68, 0.35);
+    color: #EF4444;
 }
 
 /* Quick Action Pills */

@@ -4,15 +4,18 @@ A cute, draggable circular mascot companion that sits on top of all windows.
 """
 
 from PyQt6.QtWidgets import QWidget, QMenu
-from PyQt6.QtCore import Qt, QPoint, QRectF, QPropertyAnimation, pyqtProperty, pyqtSignal, QTimer
+from PyQt6.QtCore import Qt, QPoint, QRect, QRectF, QPropertyAnimation, pyqtProperty, pyqtSignal, QTimer
 from PyQt6.QtGui import QPainter, QPixmap, QCursor, QAction
+
 from ui.assets import create_cute_mascot_pixmap
 
 class BubbleMascot(QWidget):
     request_expand = pyqtSignal()
     request_settings = pyqtSignal()
     request_quick_log = pyqtSignal()
+    request_instant_nudge = pyqtSignal()
     request_close = pyqtSignal()
+    mascot_moved = pyqtSignal(QRect)
 
     def __init__(self, size: int = 68, parent=None):
         super().__init__(parent)
@@ -22,13 +25,16 @@ class BubbleMascot(QWidget):
         self._drag_start_pos = QPoint()
         self._click_start_pos = QPoint()
 
-        # Frameless, Always on Top, Transparent
+        # Frameless, Always on Top, Transparent, Never Steals Focus
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint |
             Qt.WindowType.WindowStaysOnTopHint |
-            Qt.WindowType.Tool
+            Qt.WindowType.Tool |
+            Qt.WindowType.WindowDoesNotAcceptFocus
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setFixedSize(self.mascot_size + 16, self.mascot_size + 16)
         self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         self.setToolTip("Second Brain AI Companion\nNhấn để mở chat • Kéo để di chuyển")
@@ -75,6 +81,7 @@ class BubbleMascot(QWidget):
                 self._dragging = True
                 self.setCursor(QCursor(Qt.CursorShape.ClosedHandCursor))
                 self.move(event.globalPosition().toPoint() - self._drag_start_pos)
+                self.mascot_moved.emit(self.geometry())
                 event.accept()
 
     def mouseReleaseEvent(self, event):
@@ -112,6 +119,7 @@ class BubbleMascot(QWidget):
         """)
 
         act_expand = menu.addAction("💬 Mở Khung Chat")
+        act_nudge = menu.addAction("💡 Gợi ý chủ động ngay")
         act_quick = menu.addAction("📝 Ghi nhanh Daily Log")
         menu.addSeparator()
         act_settings = menu.addAction("⚙️ Cài Đặt")
@@ -120,9 +128,12 @@ class BubbleMascot(QWidget):
         action = menu.exec(pos)
         if action == act_expand:
             self.request_expand.emit()
+        elif action == act_nudge:
+            self.request_instant_nudge.emit()
         elif action == act_quick:
             self.request_quick_log.emit()
         elif action == act_settings:
             self.request_settings.emit()
         elif action == act_close:
             self.request_close.emit()
+

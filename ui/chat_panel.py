@@ -745,6 +745,7 @@ class ChatPanel(QWidget):
     request_minimize = pyqtSignal()
     request_settings = pyqtSignal()
     request_close = pyqtSignal()
+    request_quit = pyqtSignal()
     request_pin = pyqtSignal(bool)
 
     def __init__(self, parent=None):
@@ -821,10 +822,16 @@ class ChatPanel(QWidget):
         self.close_btn = QPushButton("✕")
         self.close_btn.setObjectName("CloseBtn")
         self.close_btn.setProperty("class", "HeaderBtn")
-        self.close_btn.setToolTip("Ẩn / Đóng")
+        self.close_btn.setToolTip("Ẩn về Mascot tròn (Chạy ngầm)")
         self.close_btn.clicked.connect(self.request_close.emit)
 
-        for btn in (self.thinking_btn, self.pin_btn, self.settings_btn, self.min_btn, self.max_btn, self.close_btn):
+        self.quit_btn = QPushButton("⏻")
+        self.quit_btn.setObjectName("QuitBtn")
+        self.quit_btn.setProperty("class", "HeaderBtn")
+        self.quit_btn.setToolTip("Thoát hoàn toàn ứng dụng (Ctrl+Q)")
+        self.quit_btn.clicked.connect(self.request_quit.emit)
+
+        for btn in (self.thinking_btn, self.pin_btn, self.settings_btn, self.min_btn, self.max_btn, self.close_btn, self.quit_btn):
             header_layout.addWidget(btn)
 
         main_layout.addWidget(header)
@@ -967,6 +974,14 @@ class ChatPanel(QWidget):
         cursor = self.prompt_input.textCursor()
         cursor.movePosition(cursor.MoveOperation.End)
         self.prompt_input.setTextCursor(cursor)
+
+    def submit_prompt(self, text: str):
+        """Programmatically submit a prompt without manual typing."""
+        if not text:
+            return
+        self.prompt_input.setText(text)
+        self._handle_send()
+
 
     def _toggle_pin(self):
         self._is_pinned = not self._is_pinned

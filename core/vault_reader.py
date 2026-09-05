@@ -156,3 +156,278 @@ class VaultReader:
                 return f"Error reading note: {e}"
 
         return None
+
+    def get_uncompleted_tasks(self, days_back: int = 3, max_tasks: int = 8) -> List[Dict[str, Any]]:
+        """Scans recent daily notes and key files for uncompleted '- [ ]' tasks."""
+        if not self.is_valid():
+            return []
+
+        import re
+        from datetime import datetime, timedelta
+
+        task_regex = re.compile(r"^\s*-\s*\[\s*\]\s+(.+)$")
+        tasks = []
+        visited_files = set()
+
+        # 1. Search daily notes for the last `days_back` days
+        today = datetime.now().date()
+        for i in range(days_back + 1):
+            day_str = (today - timedelta(days=i)).strftime("%Y-%m-%d")
+            candidates = [
+                self.vault_path / "Daily" / f"{day_str}.md",
+                self.vault_path / "Logs" / f"{day_str}.md",
+                self.vault_path / f"{day_str}.md",
+            ]
+            for c in candidates:
+                if c.exists() and c.is_file() and c not in visited_files:
+                    visited_files.add(c)
+                    try:
+                        content = c.read_text(encoding="utf-8", errors="replace")
+                        for line in content.splitlines():
+                            match = task_regex.match(line)
+                            if match:
+                                task_text = match.group(1).strip()
+                                tasks.append({
+                                    "task": task_text,
+                                    "source": str(c.relative_to(self.vault_path)),
+                                    "date": day_str,
+                                    "is_today": (i == 0)
+                                })
+                                if len(tasks) >= max_tasks:
+                                    return tasks
+                    except Exception:
+                        pass
+
+        # 2. If still have room, check root todo files (e.g. Todo.md, Tasks.md)
+        todo_names = ["Todo.md", "Tasks.md", "todo.md", "tasks.md"]
+        for tn in todo_names:
+            tf = self.vault_path / tn
+            if tf.exists() and tf.is_file() and tf not in visited_files:
+                visited_files.add(tf)
+                try:
+                    content = tf.read_text(encoding="utf-8", errors="replace")
+                    for line in content.splitlines():
+                        match = task_regex.match(line)
+                        if match:
+                            tasks.append({
+                                "task": match.group(1).strip(),
+                                "source": str(tf.relative_to(self.vault_path)),
+                                "date": "Todo list",
+                                "is_today": False
+                            })
+                            if len(tasks) >= max_tasks:
+                                return tasks
+                except Exception:
+                    pass
+
+        return tasks
+
+    def get_spaced_repetition_candidates(
+        self,
+        min_age_days: int = 0,
+        excluded_files: Optional[Any] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Picks a genuine knowledge note from the Vault to resurface to the user.
+        Excludes:
+          - Non-knowledge folders (Daily, Logs, Tasks, Templates, Archive, Assets, Skills, System, etc.)
+          - System/meta files (_CLAUDE.md, CRITICAL_FACTS.md, index.md, About Me.md, Welcome.md, log.md, etc.)
+          - Files starting with '_' or '.'
+          - Files with exclude tags (#exclude, #no-review, #private, #system, #meta, #task, #todo, #credential)
+          - Notes with YAML flags (sr: false, exclude: true, review: false)
+          - Very short/empty notes (< 80 chars)
+          - Recently shown files passed in excluded_files
+        Prioritizes notes in dedicated knowledge folders while falling back to the wider pool
+        if knowledge folder has few candidates.
+        """
+        if not self.is_valid():
+            return None
+
+        import re
+        import random
+        import time
+
+        now = time.time()
+        candidates = []
+
+        # Directories that should NEVER be resurfaced as knowledge
+        excluded_dirs = {
+            ".obsidian", ".agents", ".git", ".trash", ".vscode", ".idea",
+            "daily", "logs", "journal", "calendar",
+            "tasks", "todo", "todos", "templates", "template",
+            "archive", "archived", "drafts", "inbox", "assets",
+            "attachments", "resources", "scripts", "skills", "system",
+            "prompts", "configs"
+        }
+
+        # Specific system/meta files to ignore (case-insensitive)
+        excluded_filenames = {
+            "_claude.md", "claude.md", "critical_facts.md", "readme.md",
+            "index.md", "about me.md", "welcome.md", "log.md",
+            "todo.md", "tasks.md", "summary.md", "license.md"
+        }
+
+        excluded_tags = {
+            "#exclude", "#no-review", "#private", "#system",
+            "#meta", "#task", "#todo", "#draft", "#archive",
+            "#credential", "#credentials", "#password", "#secret"
+        }
+
+        excluded_rel_paths = set(excluded_files) if excluded_files else set()
+
+        for md_file in self.vault_path.glob("**/*.md"):
+            # 1. Ignore if any parent directory is in excluded_dirs or hidden
+            parts_lower = [p.lower() for p in md_file.parts]
+            if any(p in excluded_dirs or p.startswith(".") for p in parts_lower):
+                continue
+
+            # 2. Ignore hidden files or files starting with '_' (convention for system/meta notes)
+            if md_file.name.startswith(".") or md_file.name.startswith("_"):
+                continue
+
+            # 3. Ignore explicit system/meta filenames
+            if md_file.name.lower() in excluded_filenames:
+                continue
+
+            try:
+                stat = md_file.stat()
+                # Ignore tiny files < 80 bytes
+                if stat.st_size < 80:
+                    continue
+
+                raw_content = md_file.read_text(encoding="utf-8", errors="replace")
+                
+                # Check YAML frontmatter exclusions
+                cleaned_content = raw_content
+                if raw_content.startswith("---"):
+                    parts = raw_content.split("---", 2)
+                    if len(parts) >= 3:
+                        fm = parts[1].lower()
+                        if any(k in fm for k in [
+                            "sr: false", "sr-due: false", "exclude: true",
+                            "review: false", "type: meta", "type: system",
+                            "status: archive", "status: draft"
+                        ]):
+                            continue
+                        cleaned_content = parts[2].strip()
+
+                # Clean content length check (ignore empty or stub notes)
+                text_lines = [l.strip() for l in cleaned_content.splitlines() if l.strip() and not l.startswith("#")]
+                text_body = " ".join(text_lines)
+                if len(text_body) < 80:
+                    continue
+
+                # Check tags
+                tags = [t.lower() for t in re.findall(r"#[\w-]+", raw_content)]
+                if set(tags) & excluded_tags:
+                    continue
+
+                # Check if it's in a designated Knowledge folder
+                rel_parts_lower = [p.lower() for p in md_file.relative_to(self.vault_path).parts]
+                is_knowledge_folder = any(k in p for p in rel_parts_lower[:-1] for k in ["knowledge", "learn", "study", "notes", "permanent", "zettelkasten"])
+
+                age_days = (now - stat.st_mtime) / (24 * 3600)
+                candidates.append((md_file, age_days, is_knowledge_folder, cleaned_content, raw_content))
+            except Exception:
+                continue
+
+        if not candidates:
+            return None
+
+        # Filter out recently shown files if provided (anti-repetition)
+        if excluded_rel_paths:
+            fresh_candidates = [
+                c for c in candidates 
+                if str(c[0].relative_to(self.vault_path)) not in excluded_rel_paths
+            ]
+            # If fresh candidates exist, use them; if exhausted, reset to all candidates
+            if fresh_candidates:
+                candidates = fresh_candidates
+
+        # Prioritize knowledge folders if they have enough variety (>= 4 files),
+        # otherwise mix with all valid candidates in vault so pool isn't locked to 1-2 notes.
+        knowledge_candidates = [c for c in candidates if c[2]]
+        if len(knowledge_candidates) >= 4:
+            pool = knowledge_candidates
+        else:
+            pool = candidates
+
+        # Filter by min_age_days if requested (> 0)
+        if min_age_days > 0:
+            older_candidates = [c for c in pool if c[1] >= min_age_days]
+            pool_to_pick = older_candidates if older_candidates else pool
+        else:
+            pool_to_pick = pool
+
+        chosen = random.choice(pool_to_pick)
+        chosen_file, age_days, _, cleaned_content, raw_content = chosen
+
+        try:
+            # Find clean preview lines, preserving structure and bullet points
+            lines = [l.strip() for l in cleaned_content.splitlines() if l.strip() and not l.startswith("#")]
+            preview_lines = []
+            char_count = 0
+            for line in lines:
+                if len(preview_lines) >= 6 or char_count >= 500:
+                    break
+                preview_lines.append(line)
+                char_count += len(line)
+
+            snippet = "\n".join(preview_lines)
+            if len(snippet) > 500:
+                truncated = snippet[:500]
+                if " " in truncated:
+                    snippet = truncated.rsplit(" ", 1)[0] + "..."
+                else:
+                    snippet = truncated + "..."
+
+            # Extract tags
+            tags = re.findall(r"#([\w-]+)", raw_content)
+            tags = list(dict.fromkeys(tags))[:4]
+
+            return {
+                "file": str(chosen_file.relative_to(self.vault_path)),
+                "title": chosen_file.stem,
+                "snippet": snippet or "(Ghi chú không có nội dung mô tả)",
+                "tags": tags,
+                "days_ago": max(0, int(age_days)),
+            }
+        except Exception as e:
+            print(f"[VaultReader] Error reading spaced repetition candidate: {e}")
+            return None
+
+    def get_daily_summary_stats(self) -> Dict[str, Any]:
+        """Returns statistics of today's Daily note."""
+        if not self.is_valid():
+            return {"exists": False, "tasks_total": 0, "tasks_done": 0, "tasks_pending": 0}
+
+        import re
+        from datetime import datetime
+
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        daily_candidates = [
+            self.vault_path / "Daily" / f"{today_str}.md",
+            self.vault_path / "Logs" / f"{today_str}.md",
+            self.vault_path / f"{today_str}.md",
+        ]
+
+        for dp in daily_candidates:
+            if dp.exists() and dp.is_file():
+                try:
+                    content = dp.read_text(encoding="utf-8", errors="replace")
+                    pending = len(re.findall(r"^\s*-\s*\[\s*\]", content, re.MULTILINE))
+                    done = len(re.findall(r"^\s*-\s*\[x\]", content, re.IGNORECASE | re.MULTILINE))
+                    has_evening = bool(re.search(r"(tổng kết|evening|eod|cuối ngày)", content, re.IGNORECASE))
+                    return {
+                        "exists": True,
+                        "file": str(dp.relative_to(self.vault_path)),
+                        "tasks_total": pending + done,
+                        "tasks_pending": pending,
+                        "tasks_done": done,
+                        "has_evening_log": has_evening,
+                    }
+                except Exception:
+                    pass
+
+        return {"exists": False, "tasks_total": 0, "tasks_done": 0, "tasks_pending": 0, "has_evening_log": False}
+

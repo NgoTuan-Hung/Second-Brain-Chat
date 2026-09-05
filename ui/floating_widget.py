@@ -12,9 +12,12 @@ from config import config
 from ui.styles import DARK_GLASS_STYLE
 from ui.chat_panel import ChatPanel
 from ui.bubble_mascot import BubbleMascot
+from ui.speech_bubble import SpeechBubble
 from ui.settings_dialog import SettingsDialog
 from core.agent import SecondBrainAgent
 from core.hotkeys import HotkeyListener
+from core.proactive_service import ProactiveService
+
 
 class FloatingChatWindow(QWidget):
     EDGE_MARGIN = 8
@@ -65,6 +68,9 @@ class FloatingChatWindow(QWidget):
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Escape:
             self.chat_panel.request_minimize.emit()
+            event.accept()
+        elif event.modifiers() & Qt.KeyboardModifier.ControlModifier and event.key() == Qt.Key.Key_Q:
+            self.chat_panel.request_quit.emit()
             event.accept()
         else:
             super().keyPressEvent(event)
@@ -267,17 +273,21 @@ class FloatingChatWindow(QWidget):
 
 class FloatingCompanionApp:
     """
-    Root controller orchestrating the Chat Window, Bubble Mascot, AI Agent, and Hotkeys.
+    Root controller orchestrating the Chat Window, Bubble Mascot, Speech Bubble,
+    AI Agent, Proactive Service, and Hotkeys.
     """
     def __init__(self):
         self.chat_window = FloatingChatWindow()
         self.bubble = BubbleMascot(size=64)
+        self.speech_bubble = SpeechBubble()
         self.agent = SecondBrainAgent()
+        self.proactive_service = ProactiveService()
         self.hotkey_listener = HotkeyListener(config.hotkey)
         self.settings_dialog = None
 
         self._connect_signals()
         self.hotkey_listener.start()
+        self.proactive_service.start()
 
         # Start by showing the Chat Window
         self.chat_window.show()
@@ -288,6 +298,7 @@ class FloatingCompanionApp:
         self.chat_window.chat_panel.request_minimize.connect(self.minimize_to_bubble)
         self.chat_window.chat_panel.request_settings.connect(self.open_settings)
         self.chat_window.chat_panel.request_close.connect(self.hide_to_bubble)
+        self.chat_window.chat_panel.request_quit.connect(self.quit_app)
         self.chat_window.chat_panel.request_pin.connect(self._toggle_pin)
 
         # AI Agent to Chat Panel UI
@@ -303,7 +314,14 @@ class FloatingCompanionApp:
         self.bubble.request_expand.connect(self.expand_from_bubble)
         self.bubble.request_settings.connect(self.open_settings)
         self.bubble.request_quick_log.connect(self._on_quick_log_from_bubble)
+        self.bubble.request_instant_nudge.connect(self._on_request_instant_nudge)
         self.bubble.request_close.connect(self.quit_app)
+        self.bubble.mascot_moved.connect(self._on_mascot_moved)
+
+        # Proactive Service & Speech Bubble
+        self.proactive_service.nudge_ready.connect(self._on_proactive_nudge)
+        self.speech_bubble.action_clicked.connect(self._on_speech_bubble_action)
+        self.speech_bubble.body_clicked.connect(self._on_speech_bubble_body_clicked)
 
         # Global Hotkey
         self.hotkey_listener.hotkey_triggered.connect(self.toggle_visibility)
@@ -324,11 +342,13 @@ class FloatingCompanionApp:
         self.bubble.move(bx, by)
         self.bubble.show()
         self.bubble.raise_()
+        self.proactive_service.set_chat_active(False)
 
     def hide_to_bubble(self):
         self.minimize_to_bubble()
 
     def expand_from_bubble(self):
+        self.speech_bubble.hide_bubble()
         bubble_pos = self.bubble.pos()
         self.bubble.hide()
         target_x = max(20, bubble_pos.x() - self.chat_window.width() + 80)
@@ -338,6 +358,46 @@ class FloatingCompanionApp:
         self.chat_window.raise_()
         self.chat_window.activateWindow()
         self.chat_window.chat_panel.prompt_input.setFocus()
+        self.proactive_service.set_chat_active(True)
+
+    def _on_mascot_moved(self, rect: QRect):
+        if self.speech_bubble.isVisible():
+            self.speech_bubble.reposition(rect)
+
+    def _on_proactive_nudge(self, nudge_data: dict):
+        if self.chat_window.isVisible():
+            return
+        if self.bubble.isVisible():
+            self.speech_bubble.show_nudge(
+                nudge_data,
+                self.bubble.geometry(),
+                auto_dismiss_sec=config.bubble_dismiss_sec
+            )
+
+    def _on_request_instant_nudge(self):
+        self.proactive_service.trigger_instant_nudge()
+
+    def _on_speech_bubble_action(self, action_id: str, nudge_data: dict):
+        if action_id == "dismiss":
+            self.speech_bubble.hide_bubble()
+            return
+
+        self.expand_from_bubble()
+
+        if action_id == "quick_log":
+            self.chat_window.chat_panel._quick_prompt("Ghi nhật ký: ")
+        elif action_id == "open_daily":
+            self.chat_window.chat_panel.submit_prompt("Mở và tóm tắt ghi chú Daily note hôm nay.")
+        else:
+            prompt = nudge_data.get("prompt_to_send", "")
+            if prompt:
+                self.chat_window.chat_panel.submit_prompt(prompt)
+
+    def _on_speech_bubble_body_clicked(self, nudge_data: dict):
+        self.expand_from_bubble()
+        prompt = nudge_data.get("prompt_to_send", "")
+        if prompt:
+            self.chat_window.chat_panel.submit_prompt(prompt)
 
     def _on_quick_log_from_bubble(self):
         self.expand_from_bubble()
@@ -350,18 +410,40 @@ class FloatingCompanionApp:
             self.expand_from_bubble()
 
     def open_settings(self):
-        self.settings_dialog = SettingsDialog(self.chat_window)
+        # Tạm thời hạ cờ stay on top của chat window để settings dialog nổi lên trên tuyệt đối
+        chat_was_visible = self.chat_window.isVisible()
+        if chat_was_visible and config.always_on_top:
+            pos = self.chat_window.pos()
+            size = self.chat_window.size()
+            self.chat_window._apply_window_flags(False)
+            self.chat_window.setGeometry(pos.x(), pos.y(), size.width(), size.height())
+            self.chat_window.show()
+
+        parent = self.chat_window if chat_was_visible else self.bubble
+        self.settings_dialog = SettingsDialog(parent)
         self.settings_dialog.settings_saved.connect(self._on_settings_saved)
+        self.settings_dialog.raise_()
+        self.settings_dialog.activateWindow()
         self.settings_dialog.exec()
+
+        # Đảm bảo khôi phục trạng thái always on top theo cài đặt mới nhất
+        if self.chat_window.isVisible():
+            self._toggle_pin(config.always_on_top)
 
     def _on_settings_saved(self):
         self.chat_window.chat_panel.refresh_vault_status()
         self.chat_window.chat_panel._update_thinking_btn_style()
         self.hotkey_listener.update_hotkey(config.hotkey)
         self._toggle_pin(config.always_on_top)
+        self.proactive_service.on_settings_updated()
+        if not config.proactive_enabled and self.speech_bubble.isVisible():
+            self.speech_bubble.hide_bubble()
 
     def quit_app(self):
+        self.proactive_service.stop()
         self.hotkey_listener.stop()
+        self.speech_bubble.close()
         from PyQt6.QtWidgets import QApplication
         QApplication.quit()
+
 

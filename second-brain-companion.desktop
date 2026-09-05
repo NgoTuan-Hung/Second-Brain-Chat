@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Second Brain Companion
+GenericName=AI Desktop Companion
+Comment=Floating Desktop Mascot & Obsidian AI Assistant
+Exec=/home/hungdreamer/Desktop/all-in-one/old-stuffs/temp/ProjectBase/python/VIN_AI/Second-Brain-Chat/.venv/bin/python3 /home/hungdreamer/Desktop/all-in-one/old-stuffs/temp/ProjectBase/python/VIN_AI/Second-Brain-Chat/main.py
+Path=/home/hungdreamer/Desktop/all-in-one/old-stuffs/temp/ProjectBase/python/VIN_AI/Second-Brain-Chat
+Icon=/home/hungdreamer/Desktop/all-in-one/old-stuffs/temp/ProjectBase/python/VIN_AI/Second-Brain-Chat/assets/icon.png
+Terminal=false
+Categories=Utility;Office;
+StartupWMClass=SecondBrainCompanion
+Keywords=AI;Chat;Obsidian;SecondBrain;Companion;Mascot;

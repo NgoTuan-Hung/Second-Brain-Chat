@@ -33,6 +33,15 @@ DEFAULT_SETTINGS = {
     "last_y": 120,
     "sound_enabled": False,
     "show_thinking": True,
+    "proactive_enabled": True,
+    "morning_briefing": True,
+    "spaced_repetition": True,
+    "spaced_min_age_days": 0,
+    "evening_reflection": True,
+    "proactive_interval_min": 30,
+    "morning_time": "08:00",
+    "evening_time": "18:00",
+    "bubble_dismiss_sec": 15,
 }
 
 class Config:
@@ -103,5 +112,42 @@ class Config:
     def show_thinking(self) -> bool:
         return self._settings.get("show_thinking", True)
 
+    @property
+    def proactive_enabled(self) -> bool:
+        return self._settings.get("proactive_enabled", True)
+
+    @property
+    def morning_briefing(self) -> bool:
+        return self._settings.get("morning_briefing", True)
+
+    @property
+    def spaced_repetition(self) -> bool:
+        return self._settings.get("spaced_repetition", True)
+
+    @property
+    def spaced_min_age_days(self) -> int:
+        return int(self._settings.get("spaced_min_age_days", 0))
+
+    @property
+    def evening_reflection(self) -> bool:
+        return self._settings.get("evening_reflection", True)
+
+    @property
+    def proactive_interval_min(self) -> int:
+        return int(self._settings.get("proactive_interval_min", 30))
+
+    @property
+    def morning_time(self) -> str:
+        return self._settings.get("morning_time", "08:00")
+
+    @property
+    def evening_time(self) -> str:
+        return self._settings.get("evening_time", "18:00")
+
+    @property
+    def bubble_dismiss_sec(self) -> int:
+        return int(self._settings.get("bubble_dismiss_sec", 15))
+
 config = Config()
+
 

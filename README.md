@@ -24,6 +24,12 @@ Dự án đã tích hợp trực tiếp với **`agy`** có sẵn trên máy c�
 ## ✨ Tính Năng Nổi Bật
 
 - 🤖 **Floating Mascot & Glassmorphism UI**: Giao diện bo tròn, kính mờ tối màu sang trọng, kéo thả mượt mà, hỗ trợ thu gọn thành bong bóng linh vật (Mascot Chibi) xinh xắn.
+- 💬 **Bong Bóng Chat & Trợ Lý Chủ Động (Proactive Companion)** ⭐ *MỚI*:
+  - **Speech / Thought Bubble**: Bong bóng thoại mọc trực tiếp từ chú Mascot, tự động đảo chiều theo vị trí trên màn hình, chống tràn mép và có hiệu ứng kính mờ tinh tế.
+  - **☀️ Morning Briefing**: Tự động quét Daily note, gom các việc chưa hoàn thành (`- [ ]`) từ hôm trước và nhắc nhở khởi động ngày mới.
+  - **💡 Spaced Repetition / "On This Day"**: Khơi gợi lại các ghi chú kiến thức cũ trong Vault để ôn tập nhanh 30s qua quiz/tóm tắt từ AI.
+  - **🌙 Evening Reflection**: Nhắc nhở tổng kết ngày và ghi nhanh nhật ký trước khi nghỉ ngơi.
+  - **Tương tác 1-chạm**: Bấm vào nút hành động trên bong bóng để tự động mở chat và phân tích công việc tức thì.
 - 📌 **Always-on-Top & Global Hotkeys**: Luôn nổi trên mọi ứng dụng với phím tắt toàn hệ thống (mặc định `<Ctrl> + <Shift> + S`).
 - 📝 **Tích hợp sâu Obsidian Second Brain**:
   - Ghi nhật ký / log hoạt động vào `Daily/YYYY-MM-DD.md`.
