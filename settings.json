@@ -1,0 +1,16 @@
+{
+  "engine": "agy",
+  "gemini_api_key": "",
+  "model_name": "gemini-3.8-flash-medium",
+  "vault_path": "/home/hungdreamer/Desktop/all-in-one/App/Obsidian Data/Vault/Second Brain",
+  "hotkey": "<ctrl>+<alt>+o",
+  "always_on_top": true,
+  "theme": "dark",
+  "window_width": 734,
+  "window_height": 553,
+  "bubble_size": 64,
+  "last_x": 885,
+  "last_y": 167,
+  "sound_enabled": false,
+  "show_thinking": true
+}
